@@ -27,6 +27,17 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
+    def sqlalchemy_database_url(self) -> str:
+        """Normalize Supabase-style URLs for SQLAlchemy + psycopg v3."""
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql+psycopg://", 1)
+        return url
+
+    @computed_field
+    @property
     def cors_origins(self) -> list[str]:
         return [
             origin.strip()
