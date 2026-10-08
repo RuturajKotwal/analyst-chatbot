@@ -9,7 +9,6 @@ from app.database.models import (
     SourceDocument,
     User,
 )
-
 from app.database.supabase import create_user_client, get_service_role_client
 
 __all__ = [
