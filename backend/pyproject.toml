@@ -31,9 +31,11 @@ exclude-newer = "7 days"
 
 [dependency-groups]
 dev = [
+    "docling==2.131.0",
     "ipykernel==7.3.0",
     "pytest==9.1.1",
     "ruff==0.16.9",
+    "tiktoken==0.14.0",
 ]
 
 [tool.pytest.ini_options]
