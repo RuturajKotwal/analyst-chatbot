@@ -870,6 +870,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "docling" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "openai" },
@@ -881,21 +882,21 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "structlog" },
     { name = "supabase" },
+    { name = "tiktoken" },
     { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "docling" },
     { name = "ipykernel" },
     { name = "pytest" },
     { name = "ruff" },
-    { name = "tiktoken" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = "==1.20.0" },
+    { name = "docling", specifier = "==2.131.0" },
     { name = "fastapi", specifier = "==0.141.1" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "openai", specifier = "==3.19.2" },
@@ -907,16 +908,15 @@ requires-dist = [
     { name = "sqlalchemy", specifier = "==2.1.1" },
     { name = "structlog", specifier = "==26.1.0" },
     { name = "supabase", specifier = "==2.31.0" },
+    { name = "tiktoken", specifier = "==0.14.0" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "docling", specifier = "==2.131.0" },
     { name = "ipykernel", specifier = "==7.3.0" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "ruff", specifier = "==0.16.9" },
-    { name = "tiktoken", specifier = "==0.14.0" },
 ]
 
 [[package]]

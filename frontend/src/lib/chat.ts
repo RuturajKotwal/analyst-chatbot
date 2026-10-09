@@ -25,7 +25,7 @@ export async function listThreads(): Promise<ThreadSummary[]> {
 }
 
 export async function createThread(title?: string): Promise<ThreadSummary> {
-  return api.post<ThreadSummary>('/chat/threads', title ? { title } : undefined)
+  return api.post<ThreadSummary>('/chat/threads', title ? { title } : {})
 }
 
 export async function getThreadMessages(threadId: string): Promise<UIMessage[]> {

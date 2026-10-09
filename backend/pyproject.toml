@@ -20,6 +20,8 @@ dependencies = [
     "structlog==26.1.0",
     "supabase==2.31.0",
     "uvicorn==0.54.0",
+    "tiktoken==0.14.0",
+    "docling==2.131.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -31,13 +33,14 @@ exclude-newer = "7 days"
 
 [dependency-groups]
 dev = [
-    "docling==2.131.0",
     "ipykernel==7.3.0",
     "pytest==9.1.1",
     "ruff==0.16.9",
-    "tiktoken==0.14.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "integration: tests that require live Supabase and OpenAI credentials",
+]

@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useChat } from '@ai-sdk/react'
 import type { UIMessage } from 'ai'
 
 import { ChatError } from '@/components/chat/ChatError'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { MessageList } from '@/components/chat/MessageList'
+import { SourcePassageSheet } from '@/components/chat/SourcePassageSheet'
 import { useChatTransport } from '@/hooks/useChatTransport'
 import { useThreads } from '@/hooks/useThreads'
+import { classifyChatError } from '@/lib/chat-errors'
 import { getThreadMessages } from '@/lib/chat'
+import { type CitationPayload, type PipelineStatus as PipelineStatusState } from '@/lib/citations'
 import { ApiError } from '@/lib/http'
 
 type ChatThreadViewProps = {
@@ -18,20 +21,29 @@ type ChatThreadViewProps = {
 
 function ChatThreadView({ threadId, initialMessages }: ChatThreadViewProps) {
   const { refreshThreads } = useThreads()
-  const transport = useChatTransport(threadId)
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatusState | null>(null)
+  const [selectedCitation, setSelectedCitation] = useState<CitationPayload | null>(null)
+  const transport = useChatTransport(threadId, setPipelineStatus)
 
   const { messages, sendMessage, status, error } = useChat({
     id: threadId,
     messages: initialMessages,
     transport,
     onFinish: () => {
+      setPipelineStatus(null)
       void refreshThreads()
     },
   })
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <MessageList messages={messages} status={status} />
+      <MessageList
+        messages={messages}
+        status={status}
+        pipelineStatus={pipelineStatus}
+        selectedCitationIndex={selectedCitation?.citationIndex ?? null}
+        onSelectCitation={setSelectedCitation}
+      />
 
       <div className="mx-auto w-full max-w-3xl px-4 pb-2">
         {error ? <ChatError error={error} /> : null}
@@ -40,7 +52,18 @@ function ChatThreadView({ threadId, initialMessages }: ChatThreadViewProps) {
       <ChatInput
         status={status}
         onSend={(text) => {
+          setPipelineStatus(null)
+          setSelectedCitation(null)
           void sendMessage({ text })
+        }}
+      />
+
+      <SourcePassageSheet
+        citation={selectedCitation}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedCitation(null)
+          }
         }}
       />
     </div>
@@ -50,12 +73,15 @@ function ChatThreadView({ threadId, initialMessages }: ChatThreadViewProps) {
 function ChatThreadLoader({ threadId }: { threadId: string }) {
   const navigate = useNavigate()
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<Error | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
 
     async function load() {
+      setLoadError(null)
+
       try {
         const messages = await getThreadMessages(threadId)
         if (mounted) {
@@ -66,16 +92,19 @@ function ChatThreadLoader({ threadId }: { threadId: string }) {
           return
         }
 
+        const error = err instanceof Error ? err : new Error('Could not load this conversation.')
+
         if (err instanceof ApiError && err.status === 404) {
           navigate('/chats', { replace: true })
           return
         }
 
-        if (err instanceof ApiError) {
-          setLoadError(err.message)
-        } else {
-          setLoadError('Could not load this conversation.')
+        if (err instanceof ApiError && err.status === 401) {
+          navigate('/login', { replace: true })
+          return
         }
+
+        setLoadError(error)
       }
     }
 
@@ -84,14 +113,32 @@ function ChatThreadLoader({ threadId }: { threadId: string }) {
     return () => {
       mounted = false
     }
-  }, [threadId, navigate])
+  }, [threadId, navigate, reloadKey])
 
   if (loadError) {
+    const classified = classifyChatError(loadError)
+
     return (
       <div className="flex flex-1 items-center justify-center p-6">
-        <p className="text-sm text-destructive" role="alert">
-          {loadError}
-        </p>
+        <div className="max-w-md space-y-3 text-center">
+          <p className="text-sm font-medium text-destructive" role="alert">
+            {classified.title}
+          </p>
+          <p className="text-sm text-muted-foreground">{classified.message}</p>
+          {classified.showLoginLink ? (
+            <Link to="/login" className="text-sm font-medium text-primary underline underline-offset-4">
+              Sign in again
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="text-sm font-medium text-primary underline underline-offset-4"
+              onClick={() => setReloadKey((value) => value + 1)}
+            >
+              Try again
+            </button>
+          )}
+        </div>
       </div>
     )
   }

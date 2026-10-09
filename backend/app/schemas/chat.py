@@ -3,15 +3,48 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
-from typing import Any, Literal
+from datetime import date, datetime
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MessagePart(BaseModel):
-    type: Literal["text"]
+class TextPart(BaseModel):
+    type: Literal["text"] = "text"
     text: str
+
+
+class CitationPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    citation_index: int = Field(serialization_alias="citationIndex")
+    chunk_id: uuid.UUID = Field(serialization_alias="chunkId")
+    excerpt: str
+    ticker: str
+    company_name: str | None = Field(default=None, serialization_alias="companyName")
+    form: str
+    filing_date: date = Field(serialization_alias="filingDate")
+    page: str | None = None
+    section: str | None = None
+
+
+class CitationPart(BaseModel):
+    type: Literal["data-citation"] = "data-citation"
+    id: str | None = None
+    data: CitationPayload
+
+
+class StatusPayload(BaseModel):
+    stage: str
+    message: str
+
+
+class StatusPart(BaseModel):
+    type: Literal["data-status"] = "data-status"
+    data: StatusPayload
+
+
+MessagePart = Annotated[TextPart | CitationPart, Field(discriminator="type")]
 
 
 class UIMessage(BaseModel):

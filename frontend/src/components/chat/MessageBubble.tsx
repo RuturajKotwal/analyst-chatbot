@@ -1,20 +1,31 @@
 import type { UIMessage } from 'ai'
 
+import { AssistantMessage } from '@/components/chat/AssistantMessage'
+import { textFromMessage, type CitationPayload } from '@/lib/citations'
 import { cn } from '@/lib/utils'
 
 type MessageBubbleProps = {
   message: UIMessage
+  selectedCitationIndex: number | null
+  onSelectCitation: (citation: CitationPayload) => void
 }
 
-function textFromParts(message: UIMessage): string {
-  return message.parts
-    .filter((part) => part.type === 'text')
-    .map((part) => part.text)
-    .join('')
-}
+export function MessageBubble({
+  message,
+  selectedCitationIndex,
+  onSelectCitation,
+}: MessageBubbleProps) {
+  if (message.role === 'assistant') {
+    return (
+      <AssistantMessage
+        message={message}
+        selectedCitationIndex={selectedCitationIndex}
+        onSelectCitation={onSelectCitation}
+      />
+    )
+  }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
-  const text = textFromParts(message)
+  const text = textFromMessage(message)
   const isUser = message.role === 'user'
 
   return (

@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 
 from app.auth.dependencies import CurrentUser, get_access_token, get_current_user
 from app.chat.messages import extract_last_user_message
-from app.chat.streaming import stream_stub_and_persist
+from app.chat.orchestrator import run_turn
+from app.retrieval.retriever import DocumentRetriever
 from app.database.chats import (
     create_thread,
     list_threads,
@@ -74,12 +75,15 @@ async def post_stream(
     user_message = extract_last_user_message(body.messages)
     client = await create_user_client(access_token)
 
+    retriever = DocumentRetriever()
     return StreamingResponse(
-        stream_stub_and_persist(
+        run_turn(
             client=client,
             thread_id=body.thread_id,
+            user=user,
             user_message=user_message,
             thread_title=thread.title,
+            retriever=retriever,
         ),
         media_type="text/event-stream",
     )

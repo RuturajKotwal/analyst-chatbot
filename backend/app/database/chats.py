@@ -13,12 +13,12 @@ from supabase import AsyncClient
 from app.auth.dependencies import CurrentUser
 from app.chat.messages import (
     DEFAULT_THREAD_TITLE,
-    build_assistant_message,
     row_to_ui_message,
+    title_from_user_message,
     ui_message_to_insert,
 )
 from app.database.supabase import get_service_role_client
-from app.schemas.chat import ThreadResponse, UIMessage, thread_row_to_response
+from app.schemas.chat import CitationPart, CitationPayload, ThreadResponse, UIMessage, thread_row_to_response
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +93,35 @@ async def create_thread(
     return thread_row_to_response(response.data)
 
 
+def _citation_rows_from_message(
+    assistant_message: UIMessage,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    message_id = assistant_message.id
+    if message_id is None:
+        return rows
+
+    for part in assistant_message.parts:
+        if not isinstance(part, CitationPart):
+            continue
+        data: CitationPayload = part.data
+        rows.append(
+            {
+                "message_id": message_id,
+                "chunk_id": str(data.chunk_id),
+                "citation_index": data.citation_index,
+                "excerpt": data.excerpt,
+                "ticker": data.ticker,
+                "company_name": data.company_name,
+                "form": data.form,
+                "filing_date": data.filing_date.isoformat(),
+                "page": data.page,
+                "section": data.section,
+            }
+        )
+    return rows
+
+
 async def load_messages(client: AsyncClient, thread_id: uuid.UUID) -> list[UIMessage]:
     response = await (
         client.table("chat_messages")
@@ -101,7 +130,65 @@ async def load_messages(client: AsyncClient, thread_id: uuid.UUID) -> list[UIMes
         .order("sequence")
         .execute()
     )
-    return [row_to_ui_message(row) for row in response.data]
+    messages = [row_to_ui_message(row) for row in response.data]
+    assistant_ids = [message.id for message in messages if message.role == "assistant" and message.id]
+    if not assistant_ids:
+        return messages
+
+    citations_response = await (
+        client.table("message_citations")
+        .select(
+            "message_id,citation_index,excerpt,chunk_id,ticker,company_name,form,filing_date,page,section"
+        )
+        .in_("message_id", assistant_ids)
+        .order("citation_index")
+        .execute()
+    )
+    citations_by_message: dict[str, list[dict[str, Any]]] = {}
+    for row in citations_response.data:
+        message_id = str(row["message_id"])
+        citations_by_message.setdefault(message_id, []).append(row)
+
+    hydrated: list[UIMessage] = []
+    for message in messages:
+        if message.role != "assistant" or message.id is None:
+            hydrated.append(message)
+            continue
+
+        citation_rows = citations_by_message.get(message.id, [])
+        if not citation_rows:
+            hydrated.append(message)
+            continue
+
+        existing_citation_ids = {
+            part.data.chunk_id
+            for part in message.parts
+            if isinstance(part, CitationPart)
+        }
+        parts = list(message.parts)
+        for row in citation_rows:
+            chunk_id = uuid.UUID(str(row["chunk_id"]))
+            if chunk_id in existing_citation_ids:
+                continue
+            parts.append(
+                CitationPart(
+                    id=str(chunk_id),
+                    data=CitationPayload(
+                        citation_index=int(row["citation_index"]),
+                        chunk_id=chunk_id,
+                        excerpt=row["excerpt"],
+                        ticker=row["ticker"],
+                        company_name=row.get("company_name"),
+                        form=row["form"],
+                        filing_date=row["filing_date"],
+                        page=row.get("page"),
+                        section=row.get("section"),
+                    ),
+                )
+            )
+        hydrated.append(UIMessage(id=message.id, role=message.role, parts=parts))
+
+    return hydrated
 
 
 async def get_next_sequence(client: AsyncClient, thread_id: uuid.UUID) -> int:
@@ -118,16 +205,15 @@ async def get_next_sequence(client: AsyncClient, thread_id: uuid.UUID) -> int:
     return int(response.data[0]["sequence"]) + 1
 
 
-async def append_turn_messages(
+async def append_grounded_turn(
     client: AsyncClient,
     *,
     thread_id: uuid.UUID,
     user_message: UIMessage,
-    assistant_text: str,
+    assistant_message: UIMessage,
     thread_title: str,
 ) -> None:
     next_sequence = await get_next_sequence(client, thread_id)
-    assistant_message = build_assistant_message(assistant_text)
     rows = [
         ui_message_to_insert(
             user_message,
@@ -138,14 +224,17 @@ async def append_turn_messages(
             assistant_message,
             thread_id=thread_id,
             sequence=next_sequence + 1,
+            message_id=uuid.UUID(assistant_message.id) if assistant_message.id else None,
         ),
     ]
     await client.table("chat_messages").insert(rows).execute()
 
+    citation_rows = _citation_rows_from_message(assistant_message)
+    if citation_rows:
+        await client.table("message_citations").insert(citation_rows).execute()
+
     updates: dict[str, Any] = {"updated_at": datetime.now(UTC).isoformat()}
     if thread_title == DEFAULT_THREAD_TITLE:
-        from app.chat.messages import title_from_user_message
-
         updates["title"] = title_from_user_message(user_message)
 
     await (

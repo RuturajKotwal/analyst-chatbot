@@ -58,6 +58,38 @@ def test_post_thread_creates_thread(client: TestClient) -> None:
     assert response.json()["id"] == str(THREAD_ID)
 
 
+def test_post_thread_accepts_empty_body(client: TestClient) -> None:
+    thread = ThreadResponse(id=THREAD_ID, title="New chat", created_at=NOW, updated_at=NOW)
+
+    with (
+        patch("app.api.chat.ensure_user", AsyncMock()),
+        patch("app.api.chat.create_user_client", AsyncMock(return_value=MagicMock())),
+        patch("app.api.chat.create_thread", AsyncMock(return_value=thread)) as mock_create,
+    ):
+        response = client.post(
+            "/chat/threads",
+            headers={"Authorization": "Bearer test"},
+            json={},
+        )
+
+    assert response.status_code == 200
+    mock_create.assert_awaited_once()
+    assert mock_create.await_args.kwargs["title"] is None
+
+
+def test_post_thread_rejects_missing_body(client: TestClient) -> None:
+    with (
+        patch("app.api.chat.ensure_user", AsyncMock()),
+        patch("app.api.chat.create_user_client", AsyncMock(return_value=MagicMock())),
+    ):
+        response = client.post(
+            "/chat/threads",
+            headers={"Authorization": "Bearer test"},
+        )
+
+    assert response.status_code == 422
+
+
 def test_get_messages_returns_403_for_foreign_thread(client: TestClient) -> None:
     from fastapi import HTTPException
 
@@ -88,7 +120,7 @@ def test_post_stream_returns_event_stream(client: TestClient) -> None:
         patch("app.api.chat.ensure_user", AsyncMock()),
         patch("app.api.chat.require_thread_access", AsyncMock(return_value=thread)),
         patch("app.api.chat.create_user_client", AsyncMock(return_value=MagicMock())),
-        patch("app.api.chat.stream_stub_and_persist", fake_stream),
+        patch("app.api.chat.run_turn", fake_stream),
     ):
         response = client.post(
             "/chat/stream",
