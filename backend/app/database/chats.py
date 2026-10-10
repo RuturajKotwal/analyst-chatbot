@@ -87,10 +87,9 @@ async def create_thread(
             }
         )
         .select("id,title,created_at,updated_at")
-        .single()
         .execute()
     )
-    return thread_row_to_response(response.data)
+    return thread_row_to_response(response.data[0])
 
 
 def _citation_rows_from_message(
@@ -107,6 +106,7 @@ def _citation_rows_from_message(
         data: CitationPayload = part.data
         rows.append(
             {
+                "id": str(uuid.uuid4()),
                 "message_id": message_id,
                 "chunk_id": str(data.chunk_id),
                 "citation_index": data.citation_index,

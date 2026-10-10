@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import CurrentUser, get_access_token, get_current_user
 from app.main import app
-from app.schemas.chat import ThreadResponse
+from app.schemas.chat import CitationPart, StreamRequest, ThreadResponse
 
 TEST_USER = CurrentUser(id=uuid.uuid4(), email="analyst@example.com")
 OTHER_USER = CurrentUser(id=uuid.uuid4(), email="other@example.com")
@@ -139,3 +139,48 @@ def test_post_stream_returns_event_stream(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     assert "text-start" in response.text
+
+
+def test_stream_request_accepts_camel_case_citation_parts() -> None:
+    thread_id = uuid.uuid4()
+    chunk_id = uuid.uuid4()
+
+    request = StreamRequest.model_validate(
+        {
+            "threadId": str(thread_id),
+            "messages": [
+                {
+                    "id": "assistant-message",
+                    "role": "assistant",
+                    "parts": [
+                        {"type": "text", "text": "Answer with a citation."},
+                        {
+                            "type": "data-citation",
+                            "id": str(chunk_id),
+                            "data": {
+                                "citationIndex": 1,
+                                "chunkId": str(chunk_id),
+                                "excerpt": "Relevant excerpt",
+                                "ticker": "AAPL",
+                                "companyName": "Apple Inc.",
+                                "form": "10-K",
+                                "filingDate": "2024-10-31",
+                                "page": "42",
+                                "section": "Risk Factors",
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "Follow up"}],
+                },
+            ],
+        }
+    )
+
+    citation_part = request.messages[0].parts[1]
+    assert isinstance(citation_part, CitationPart)
+    assert citation_part.data.citation_index == 1
+    assert citation_part.data.chunk_id == chunk_id
+    assert citation_part.data.company_name == "Apple Inc."

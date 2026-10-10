@@ -17,13 +17,13 @@ class TextPart(BaseModel):
 class CitationPayload(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    citation_index: int = Field(serialization_alias="citationIndex")
-    chunk_id: uuid.UUID = Field(serialization_alias="chunkId")
+    citation_index: int = Field(alias="citationIndex")
+    chunk_id: uuid.UUID = Field(alias="chunkId")
     excerpt: str
     ticker: str
-    company_name: str | None = Field(default=None, serialization_alias="companyName")
+    company_name: str | None = Field(default=None, alias="companyName")
     form: str
-    filing_date: date = Field(serialization_alias="filingDate")
+    filing_date: date = Field(alias="filingDate")
     page: str | None = None
     section: str | None = None
 
