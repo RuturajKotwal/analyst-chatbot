@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import pytest
@@ -21,7 +22,7 @@ def test_agent_answers_apple_question_with_citations() -> None:
         "How did Apple describe iPhone and Services revenue in its recent 10-K filings?",
         deps,
     )
-    validation = GroundingValidator().validate(answer, registry)
+    validation = asyncio.run(GroundingValidator().validate(answer, registry))
 
     assert validation.ok
     if not answer.insufficient_evidence:
@@ -43,7 +44,7 @@ def test_agent_refuses_underspecified_stock_pick_question() -> None:
         user_id=uuid.uuid4(),
     )
     answer = run_document_agent("What is the best stock to buy right now?", deps)
-    validation = GroundingValidator().validate(answer, registry)
+    validation = asyncio.run(GroundingValidator().validate(answer, registry))
 
     assert validation.ok
     assert answer.insufficient_evidence or not answer.citations

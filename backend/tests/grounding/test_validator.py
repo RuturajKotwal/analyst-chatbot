@@ -1,9 +1,15 @@
+import asyncio
 import uuid
 from datetime import date
 
 from app.assistant.deps import TurnRegistry
 from app.assistant.outputs import Citation, GroundedAnswer
-from app.grounding.validator import GroundingValidator, prune_unreferenced_citations
+from app.grounding.validator import (
+    CitationGroundingCase,
+    CitationGroundingDecision,
+    GroundingValidator,
+    prune_unreferenced_citations,
+)
 from app.retrieval.types import RetrievedPassage
 
 
@@ -26,6 +32,43 @@ def _passage(text: str = "Services revenue grew 12% year over year.") -> Retriev
     )
 
 
+class FakeGroundingJudge:
+    def __init__(self, *, supported: bool = True, fail: bool = False) -> None:
+        self.supported = supported
+        self.fail = fail
+        self.calls: list[list[CitationGroundingCase]] = []
+
+    async def judge(
+        self,
+        cases: list[CitationGroundingCase],
+    ) -> list[CitationGroundingDecision]:
+        self.calls.append(cases)
+        if self.fail:
+            raise RuntimeError("judge unavailable")
+        return [
+            CitationGroundingDecision(
+                citation_index=case.citation_index,
+                supported=self.supported,
+                reason="supported" if self.supported else "unsupported",
+            )
+            for case in cases
+        ]
+
+
+def _validate(
+    answer: GroundedAnswer,
+    registry: TurnRegistry,
+    *,
+    judge: FakeGroundingJudge | None = None,
+):
+    return asyncio.run(
+        GroundingValidator(judge=judge or FakeGroundingJudge()).validate(
+            answer,
+            registry,
+        )
+    )
+
+
 def test_valid_grounded_answer_passes() -> None:
     passage = _passage()
     registry = TurnRegistry()
@@ -40,7 +83,7 @@ def test_valid_grounded_answer_passes() -> None:
             )
         ],
     )
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry)
     assert result.ok
 
 
@@ -51,7 +94,7 @@ def test_insufficient_evidence_requires_empty_citations() -> None:
         citations=[],
         insufficient_evidence=True,
     )
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry)
     assert result.ok
 
 
@@ -66,7 +109,7 @@ def test_insufficient_evidence_rejects_citations() -> None:
         ],
         insufficient_evidence=True,
     )
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry)
     assert not result.ok
 
 
@@ -81,12 +124,14 @@ def test_unknown_chunk_id_fails() -> None:
             Citation(citation_index=1, chunk_id=unknown_id, excerpt="Claim"),
         ],
     )
-    result = GroundingValidator().validate(answer, registry)
+    judge = FakeGroundingJudge()
+    result = _validate(answer, registry, judge=judge)
     assert not result.ok
     assert "not retrieved" in (result.error or "")
+    assert judge.calls == []
 
 
-def test_bad_excerpt_fails() -> None:
+def test_unsupported_claim_fails() -> None:
     passage = _passage()
     registry = TurnRegistry()
     registry.register(passage)
@@ -100,8 +145,57 @@ def test_bad_excerpt_fails() -> None:
             )
         ],
     )
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry, judge=FakeGroundingJudge(supported=False))
     assert not result.ok
+    assert "not supported" in (result.error or "")
+
+
+def test_table_claim_passes_when_judge_finds_support() -> None:
+    passage = _passage(
+        "| Services (3) |  |  | 68,425 | 68,425 |\n"
+        "| Total net sales | Total net sales | $ | 365,817 |"
+    )
+    registry = TurnRegistry()
+    registry.register(passage)
+    answer = GroundedAnswer(
+        answer="Services revenue was about $68.4 billion [1].",
+        citations=[
+            Citation(
+                citation_index=1,
+                chunk_id=passage.chunk_id,
+                excerpt="Services revenue was about $68.4 billion.",
+            )
+        ],
+    )
+    judge = FakeGroundingJudge(supported=True)
+
+    result = _validate(answer, registry, judge=judge)
+
+    assert result.ok
+    assert len(judge.calls) == 1
+    assert judge.calls[0][0].answer == answer.answer
+    assert judge.calls[0][0].source_text == passage.text
+
+
+def test_judge_error_fails_closed() -> None:
+    passage = _passage()
+    registry = TurnRegistry()
+    registry.register(passage)
+    answer = GroundedAnswer(
+        answer="Services revenue grew [1].",
+        citations=[
+            Citation(
+                citation_index=1,
+                chunk_id=passage.chunk_id,
+                excerpt="Services revenue grew 12% year over year.",
+            )
+        ],
+    )
+
+    result = _validate(answer, registry, judge=FakeGroundingJudge(fail=True))
+
+    assert not result.ok
+    assert "Grounding judge failed" in (result.error or "")
 
 
 def test_missing_marker_fails() -> None:
@@ -118,7 +212,7 @@ def test_missing_marker_fails() -> None:
             )
         ],
     )
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry)
     assert not result.ok
 
 
@@ -126,7 +220,7 @@ def test_empty_citations_on_normal_answer_fails() -> None:
     registry = TurnRegistry()
     registry.register(_passage())
     answer = GroundedAnswer(answer="No citations here.")
-    result = GroundingValidator().validate(answer, registry)
+    result = _validate(answer, registry)
     assert not result.ok
 
 
@@ -155,4 +249,4 @@ def test_prune_unreferenced_citations_removes_extra_metadata() -> None:
     pruned = prune_unreferenced_citations(answer)
 
     assert [citation.citation_index for citation in pruned.citations] == [1]
-    assert GroundingValidator().validate(pruned, registry).ok
+    assert _validate(pruned, registry).ok

@@ -8,6 +8,7 @@ import pytest
 from app.assistant.outputs import Citation, GroundedAnswer
 from app.auth.dependencies import CurrentUser
 from app.chat.orchestrator import run_turn
+from app.grounding.validator import ValidationResult
 from app.retrieval.types import RetrievedPassage
 from app.schemas.chat import TextPart, UIMessage
 
@@ -52,8 +53,12 @@ async def test_run_turn_streams_grounded_answer_and_persists() -> None:
         deps.registry.register(passage)
         return grounded
 
+    fake_validator = MagicMock()
+    fake_validator.validate = AsyncMock(return_value=ValidationResult(ok=True))
+
     with (
         patch("app.chat.orchestrator.run_document_agent", fake_run),
+        patch("app.chat.orchestrator.GroundingValidator", return_value=fake_validator),
         patch(
             "app.chat.streaming.append_grounded_turn",
             AsyncMock(),

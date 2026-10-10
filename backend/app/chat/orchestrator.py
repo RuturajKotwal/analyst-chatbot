@@ -91,7 +91,7 @@ async def run_turn(
         yield event
 
     grounded = prune_unreferenced_citations(grounded)
-    validation = GroundingValidator().validate(grounded, registry)
+    validation = await GroundingValidator().validate(grounded, registry)
 
     if validation.ok:
         async for event in stream_status("streaming", "Preparing answer…"):

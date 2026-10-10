@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import uuid
 
@@ -58,7 +59,7 @@ def main() -> None:
     print(f"Query ({QUERY_KEY}): {query}\n", flush=True)
 
     answer = prune_unreferenced_citations(run_document_agent(query, deps))
-    validation = GroundingValidator().validate(answer, registry)
+    validation = asyncio.run(GroundingValidator().validate(answer, registry))
 
     report_progress(
         f"grounding validation ok={validation.ok} "

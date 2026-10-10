@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_dimensions: int = 1536
     openai_chat_model: str = "gpt-5.5"
+    openai_grounding_model: str = "gpt-4.1-mini"
     openai_agent_request_limit: int = 20
     openai_agent_temperature: float = 0.0
 
