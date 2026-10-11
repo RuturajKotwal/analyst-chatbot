@@ -62,7 +62,7 @@ export function ChatInput({ status, onSend, onStop }: ChatInputProps) {
           </PromptInputActions>
         </PromptInput>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Answers are grounded in SEC filings. Validate citations before relying on them.
+          Answers are grounded in SEC filings. Verify citations before relying on them.
         </p>
       </div>
     </div>
