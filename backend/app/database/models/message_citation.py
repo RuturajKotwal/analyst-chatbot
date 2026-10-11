@@ -46,7 +46,7 @@ class MessageCitation(Base):
     form: Mapped[str] = mapped_column(String(16), nullable=False)
     filing_date: Mapped[date] = mapped_column(Date, nullable=False)
     page: Mapped[str | None] = mapped_column(String(64))
-    section: Mapped[str | None] = mapped_column(String(255))
+    section: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

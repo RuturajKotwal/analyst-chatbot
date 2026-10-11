@@ -55,6 +55,33 @@ class FakeGroundingJudge:
         ]
 
 
+class MissingBatchDecisionJudge:
+    def __init__(self) -> None:
+        self.calls: list[list[CitationGroundingCase]] = []
+
+    async def judge(
+        self,
+        cases: list[CitationGroundingCase],
+    ) -> list[CitationGroundingDecision]:
+        self.calls.append(cases)
+        if len(cases) > 1:
+            return [
+                CitationGroundingDecision(
+                    citation_index=cases[0].citation_index,
+                    supported=True,
+                    reason="supported",
+                )
+            ]
+
+        return [
+            CitationGroundingDecision(
+                citation_index=cases[0].citation_index,
+                supported=True,
+                reason="supported",
+            )
+        ]
+
+
 def _validate(
     answer: GroundedAnswer,
     registry: TurnRegistry,
@@ -196,6 +223,35 @@ def test_judge_error_fails_closed() -> None:
 
     assert not result.ok
     assert "Grounding judge failed" in (result.error or "")
+
+
+def test_malformed_batch_judge_decisions_retry_per_citation() -> None:
+    first = _passage("Revenue increased.")
+    second = _passage("Costs decreased.")
+    registry = TurnRegistry()
+    registry.register(first)
+    registry.register(second)
+    answer = GroundedAnswer(
+        answer="Revenue increased [1]. Costs decreased [2].",
+        citations=[
+            Citation(
+                citation_index=1,
+                chunk_id=first.chunk_id,
+                excerpt="Revenue increased.",
+            ),
+            Citation(
+                citation_index=2,
+                chunk_id=second.chunk_id,
+                excerpt="Costs decreased.",
+            ),
+        ],
+    )
+    judge = MissingBatchDecisionJudge()
+
+    result = _validate(answer, registry, judge=judge)
+
+    assert result.ok
+    assert [len(call) for call in judge.calls] == [2, 1, 1]
 
 
 def test_missing_marker_fails() -> None:

@@ -9,9 +9,10 @@ from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database.models import DocumentChunk, SourceDocument
+from app.database.models import DocumentChunk, DocumentTable, MessageCitation, SourceDocument
 from ingest.chunking import (
     CHUNK_MAX_TOKENS,
+    ChunkRecord,
     chunk_document,
     html_path_for_accession,
     iter_all_html_paths,
@@ -51,9 +52,43 @@ def _document_has_chunks(session: Session, document_id) -> bool:
 
 
 def _delete_chunks(session: Session, document_id) -> None:
+    chunk_ids = select(DocumentChunk.id).where(DocumentChunk.document_id == document_id)
+    session.execute(
+        delete(MessageCitation).where(MessageCitation.chunk_id.in_(chunk_ids))
+    )
     session.execute(
         delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
     )
+    session.execute(
+        delete(DocumentTable).where(DocumentTable.document_id == document_id)
+    )
+
+
+def _document_tables_from_records(
+    document_id,
+    records: list[ChunkRecord],
+) -> list[DocumentTable]:
+    tables_by_index: dict[int, DocumentTable] = {}
+    for record in records:
+        metadata = record.chunk_metadata
+        if metadata.get("chunk_kind") != "table_row":
+            continue
+        table_data = metadata.get("table")
+        table_index = metadata.get("table_index")
+        if not isinstance(table_data, dict) or not isinstance(table_index, int):
+            continue
+        if table_index in tables_by_index:
+            continue
+        tables_by_index[table_index] = DocumentTable(
+            document_id=document_id,
+            table_index=table_index,
+            title=table_data.get("title"),
+            units=table_data.get("units"),
+            markdown=table_data["markdown"],
+            table_data=table_data,
+            source_html_hash=table_data["source_html_hash"],
+        )
+    return list(tables_by_index.values())
 
 
 def ingest_document(
@@ -98,8 +133,18 @@ def ingest_document(
     texts = [record.text for record in records]
     print(f"  Embedding {len(texts)} chunk(s) (batch_size={EMBED_BATCH_SIZE})...")
     vectors = embed_texts(texts)
+    document_tables = _document_tables_from_records(document.id, records)
+    for table in document_tables:
+        session.add(table)
+    if document_tables:
+        session.flush()
+    table_ids_by_index = {table.table_index: str(table.id) for table in document_tables}
 
     for record, embedding in zip(records, vectors, strict=True):
+        metadata = dict(record.chunk_metadata)
+        table_index = metadata.get("table_index")
+        if isinstance(table_index, int) and table_index in table_ids_by_index:
+            metadata["table_id"] = table_ids_by_index[table_index]
         session.add(
             DocumentChunk(
                 document_id=document.id,
@@ -109,7 +154,7 @@ def ingest_document(
                 text=record.text,
                 embedding=embedding,
                 token_count=record.token_count,
-                chunk_metadata=record.chunk_metadata,
+                chunk_metadata=metadata,
             )
         )
 

@@ -22,6 +22,8 @@ from app.grounding.validator import GroundingValidator, prune_unreferenced_citat
 from app.retrieval.retriever import DocumentRetriever
 from app.schemas.chat import UIMessage
 
+MAX_VALIDATION_ATTEMPTS = 2
+
 
 async def _yield_status_updates(
     status_queue: asyncio.Queue[tuple[str, str]],
@@ -50,48 +52,64 @@ async def run_turn(
     thread_title: str,
     retriever: DocumentRetriever,
 ) -> AsyncIterator[str]:
-    registry = TurnRegistry()
     loop = asyncio.get_running_loop()
-    status_queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
-
-    def on_status(stage: str, message: str) -> None:
-        loop.call_soon_threadsafe(status_queue.put_nowait, (stage, message))
-
-    deps = DocumentAgentDeps(
-        retriever=retriever,
-        registry=registry,
-        thread_id=thread_id,
-        user_id=user.id,
-        on_status=on_status,
-    )
     query = text_from_parts(user_message.parts).strip()
     if not query:
         async for event in stream_error("User message is empty."):
             yield event
         return
 
-    agent_task = asyncio.create_task(
-        asyncio.to_thread(run_document_agent, query, deps)
-    )
-
     async for event in stream_status("analyzing", "Analyzing your question…"):
         yield event
 
-    async for event in _yield_status_updates(status_queue, agent_task):
-        yield event
+    grounded: GroundedAnswer | None = None
+    validation = None
+    for attempt in range(1, MAX_VALIDATION_ATTEMPTS + 1):
+        registry = TurnRegistry()
+        status_queue = asyncio.Queue()
 
-    try:
-        grounded = await agent_task
-    except Exception as exc:
-        async for event in stream_error(f"Assistant run failed: {exc}"):
+        def on_status(stage: str, message: str) -> None:
+            loop.call_soon_threadsafe(status_queue.put_nowait, (stage, message))
+
+        deps = DocumentAgentDeps(
+            retriever=retriever,
+            registry=registry,
+            thread_id=thread_id,
+            user_id=user.id,
+            on_status=on_status,
+        )
+        agent_task = asyncio.create_task(
+            asyncio.to_thread(run_document_agent, query, deps)
+        )
+
+        async for event in _yield_status_updates(status_queue, agent_task):
+            yield event
+
+        try:
+            grounded = await agent_task
+        except Exception as exc:
+            async for event in stream_error(f"Assistant run failed: {exc}"):
+                yield event
+            return
+
+        async for event in stream_status("verifying", "Verifying citations…"):
+            yield event
+
+        grounded = prune_unreferenced_citations(grounded)
+        validation = await GroundingValidator().validate(grounded, registry)
+        if validation.ok or attempt == MAX_VALIDATION_ATTEMPTS:
+            break
+
+        async for event in stream_status(
+            "retrying",
+            "Could not fully verify citations; retrying with stricter grounding…",
+        ):
+            yield event
+
+    if grounded is None or validation is None:
+        async for event in stream_error("Assistant run failed before producing an answer."):
             yield event
         return
-
-    async for event in stream_status("verifying", "Verifying citations…"):
-        yield event
-
-    grounded = prune_unreferenced_citations(grounded)
-    validation = await GroundingValidator().validate(grounded, registry)
 
     if validation.ok:
         async for event in stream_status("streaming", "Preparing answer…"):

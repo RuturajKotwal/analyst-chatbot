@@ -21,6 +21,10 @@ dependencies = [
     "supabase==2.31.0",
     "uvicorn==0.54.0",
     "tiktoken==0.14.0",
+]
+
+[project.optional-dependencies]
+ingest = [
     "docling==2.131.0",
 ]
 

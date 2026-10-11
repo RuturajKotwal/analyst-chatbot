@@ -16,9 +16,9 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-- API: http://127.0.0.1:8000
-- Health: http://127.0.0.1:8000/health
-- Docs: http://127.0.0.1:8000/docs
+- API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+- Health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+- Docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 Alternative: `uv run python app/main.py`
 
@@ -27,6 +27,7 @@ Alternative: `uv run python app/main.py`
 | Task | Command |
 | --- | --- |
 | Install / update deps | `uv sync` |
+| Install ingestion deps | `uv sync --extra ingest` |
 | Add a dependency | `uv add <package>` |
 | Lint | `uv run ruff check .` |
 | Tests | `uv run pytest` |

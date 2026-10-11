@@ -118,6 +118,30 @@ def prune_unreferenced_citations(answer: GroundedAnswer) -> GroundedAnswer:
     return answer.model_copy(update={"citations": citations})
 
 
+def _decision_indexes_match_cases(
+    decisions: list[CitationGroundingDecision],
+    cases: list[CitationGroundingCase],
+) -> bool:
+    decision_indices = [decision.citation_index for decision in decisions]
+    if len(decision_indices) != len(set(decision_indices)):
+        return False
+    return set(decision_indices) == {case.citation_index for case in cases}
+
+
+async def _judge_with_index_repair(
+    judge: GroundingJudge,
+    cases: list[CitationGroundingCase],
+) -> list[CitationGroundingDecision]:
+    decisions = await judge.judge(cases)
+    if _decision_indexes_match_cases(decisions, cases) or len(cases) <= 1:
+        return decisions
+
+    repaired: list[CitationGroundingDecision] = []
+    for case in cases:
+        repaired.extend(await judge.judge([case]))
+    return repaired
+
+
 class GroundingValidator:
     def __init__(self, judge: GroundingJudge | None = None) -> None:
         self._judge = judge
@@ -187,7 +211,7 @@ class GroundingValidator:
 
         try:
             judge = self._judge or OpenAIGroundingJudge()
-            decisions = await judge.judge(cases)
+            decisions = await _judge_with_index_repair(judge, cases)
         except Exception as exc:
             return ValidationResult(
                 ok=False,

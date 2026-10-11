@@ -25,7 +25,7 @@ Full brief: [docs/client-brief.md](docs/client-brief.md)
 
 ```text
 document-copilot/
-├── GEMINI.md           # agent instructions (read first)
+├── AGENTS.md           # agent instructions (read first)
 ├── README.md           # this file
 ├── data/               # local corpus + download script (payloads gitignored)
 ├── docs/
@@ -141,6 +141,7 @@ Load filing metadata into Supabase:
 
 ```bash
 cd backend
+uv sync --extra ingest
 uv run python -m ingest.load_source_documents
 ```
 

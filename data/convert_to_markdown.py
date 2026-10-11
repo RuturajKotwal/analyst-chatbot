@@ -8,10 +8,17 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 from docling.document_converter import DocumentConverter
+
+BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from ingest.sec_tables import extract_sec_tables, tables_to_json, tables_to_markdown
 
 
 # Params: edit these, then run `uv run data/convert_to_markdown.py`
@@ -55,24 +62,46 @@ def convert_downloads_to_markdown() -> dict:
         md_relative = str(Path(html_relative).with_suffix(".md"))
         md_path = OUTPUT_DIR / md_relative
         md_path.parent.mkdir(parents=True, exist_ok=True)
+        tables_json_path = md_path.with_suffix(".tables.json")
+        html = html_path.read_text(encoding="utf-8")
+        tables = extract_sec_tables(html)
 
         if SKIP_EXISTING and md_path.exists():
             print(f"Skipping existing {md_relative}")
+            if tables and "# Normalized Tables" not in md_path.read_text(encoding="utf-8"):
+                with md_path.open("a", encoding="utf-8") as output:
+                    output.write(f"\n\n# Normalized Tables\n\n{tables_to_markdown(tables)}")
+            if tables and not tables_json_path.exists():
+                tables_json_path.write_text(
+                    json.dumps(tables_to_json(tables), indent=2) + "\n",
+                    encoding="utf-8",
+                )
         else:
             print(f"Converting {html_relative}...")
             result = converter.convert(html_path)
+            markdown = result.document.export_to_markdown()
+            if tables:
+                markdown = f"{markdown}\n\n# Normalized Tables\n\n{tables_to_markdown(tables)}"
             md_path.write_text(
-                result.document.export_to_markdown(),
+                markdown,
                 encoding="utf-8",
             )
+            if tables:
+                tables_json_path.write_text(
+                    json.dumps(tables_to_json(tables), indent=2) + "\n",
+                    encoding="utf-8",
+                )
 
-        manifest["filings"].append(
-            {
-                **filing,
-                "html_local_path": html_relative,
-                "local_path": md_relative,
-            }
-        )
+        manifest_filing = {
+            **filing,
+            "html_local_path": html_relative,
+            "local_path": md_relative,
+        }
+        if tables_json_path.exists():
+            manifest_filing["tables_local_path"] = str(
+                Path(md_relative).with_suffix(".tables.json")
+            )
+        manifest["filings"].append(manifest_filing)
         manifest["converted_count"] += 1
 
     output_manifest_path = OUTPUT_DIR / "manifest.json"

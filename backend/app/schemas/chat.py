@@ -45,6 +45,16 @@ class CitationContextChunk(BaseModel):
     section: str | None = None
 
 
+class CitationContextTable(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    table_index: int = Field(alias="tableIndex")
+    title: str | None = None
+    units: str | None = None
+    markdown: str
+    table_data: dict[str, Any] = Field(alias="tableData")
+
+
 class CitationContextResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -56,6 +66,7 @@ class CitationContextResponse(BaseModel):
     filing_date: date = Field(alias="filingDate")
     source_url: str = Field(alias="sourceUrl")
     chunks: list[CitationContextChunk]
+    table: CitationContextTable | None = None
 
 
 class StatusPayload(BaseModel):

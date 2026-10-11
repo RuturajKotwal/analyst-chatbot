@@ -10,7 +10,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { getCitationContext, type CitationContext, type CitationContextChunk } from '@/lib/chat'
+import {
+  getCitationContext,
+  type CitationContext,
+  type CitationContextChunk,
+  type CitationContextTable,
+} from '@/lib/chat'
 import { type CitationPayload } from '@/lib/citations'
 import { cn } from '@/lib/utils'
 
@@ -137,6 +142,26 @@ function SourceChunkCard({ chunk }: { chunk: CitationContextChunk }) {
   )
 }
 
+function SourceTableCard({ table }: { table: CitationContextTable }) {
+  const markdown = useMemo(() => normalizeMarkdownTables(table.markdown), [table.markdown])
+
+  return (
+    <section className="rounded-xl border border-primary/40 bg-primary/5 p-3 shadow-xs">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="rounded-md bg-primary px-2 py-1 text-[0.65rem] font-semibold tracking-wide text-primary-foreground uppercase">
+          Normalized table
+        </span>
+        <Badge variant="outline">Table {table.tableIndex}</Badge>
+        {table.title ? <Badge variant="outline">{table.title}</Badge> : null}
+        {table.units ? <Badge variant="outline">{table.units}</Badge> : null}
+      </div>
+      <div className="overflow-x-auto">
+        <Markdown className={SOURCE_MARKDOWN_CLASSES}>{markdown}</Markdown>
+      </div>
+    </section>
+  )
+}
+
 type SourcePassageSheetProps = {
   citation: CitationPayload | null
   onOpenChange: (open: boolean) => void
@@ -242,9 +267,14 @@ export function SourcePassageSheet({ citation, onOpenChange }: SourcePassageShee
                 </p>
               ) : null}
 
-              {!loading && resolvedContext?.chunks.map((chunk) => (
-                <SourceChunkCard key={chunk.chunkId} chunk={chunk} />
-              ))}
+              {!loading && resolvedContext?.table ? (
+                <SourceTableCard table={resolvedContext.table} />
+              ) : null}
+
+              {!loading &&
+                resolvedContext?.chunks.map((chunk) => (
+                  <SourceChunkCard key={chunk.chunkId} chunk={chunk} />
+                ))}
             </div>
           </>
         ) : null}

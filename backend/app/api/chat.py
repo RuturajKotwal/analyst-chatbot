@@ -28,6 +28,7 @@ from app.retrieval.retriever import DocumentRetriever
 from app.schemas.chat import (
     CitationContextChunk,
     CitationContextResponse,
+    CitationContextTable,
     CreateThreadRequest,
     MessageHistoryResponse,
     StreamRequest,
@@ -64,6 +65,7 @@ def citation_context_response(
         form=document.form,
         filing_date=document.filing_date,
         source_url=document.source_url,
+        table=_table_context_from_chunk(anchor),
         chunks=[
             CitationContextChunk(
                 chunk_id=chunk.id,
@@ -75,6 +77,22 @@ def citation_context_response(
             )
             for chunk in chunks
         ],
+    )
+
+
+def _table_context_from_chunk(chunk: DocumentChunk) -> CitationContextTable | None:
+    metadata = chunk.chunk_metadata or {}
+    if metadata.get("chunk_kind") != "table_row":
+        return None
+    table_data = metadata.get("table")
+    if not isinstance(table_data, dict):
+        return None
+    return CitationContextTable(
+        table_index=table_data["table_index"],
+        title=table_data.get("title"),
+        units=table_data.get("units"),
+        markdown=table_data["markdown"],
+        table_data=table_data,
     )
 
 

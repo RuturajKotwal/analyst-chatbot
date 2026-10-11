@@ -6,6 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import CurrentUser, get_access_token, get_current_user
+from app.api.chat import citation_context_response
+from app.database.models import DocumentChunk, SourceDocument
 from app.main import app
 from app.schemas.chat import (
     CitationContextChunk,
@@ -204,6 +206,53 @@ def test_get_citation_context_returns_neighbor_chunks(client: TestClient) -> Non
     assert body["chunks"][1]["chunkIndex"] == 37
     assert body["chunks"][1]["text"].startswith("| Segment |")
     mock_load.assert_called_once_with(chunk_id, 2)
+
+
+def test_citation_context_response_includes_full_table_for_table_chunk() -> None:
+    document_id = uuid.uuid4()
+    chunk_id = uuid.uuid4()
+    document = SourceDocument(
+        id=document_id,
+        ticker="AAPL",
+        cik="0000320193",
+        company_name="Apple Inc.",
+        form="10-K",
+        filing_date="2025-10-31",
+        report_date="2025-09-27",
+        fiscal_year=2025,
+        accession_number="0000320193-25-000079",
+        primary_document="aapl-20250927.htm",
+        source_url="https://example.com/aapl",
+    )
+    chunk = DocumentChunk(
+        id=chunk_id,
+        document_id=document_id,
+        chunk_index=37,
+        text="Products and Services Performance\n| Category | 2025 Sales |\n| --- | --- |\n| iPhone | $209,586 |",
+        page=None,
+        section="Products and Services Performance",
+        chunk_metadata={
+            "chunk_kind": "table_row",
+            "table": {
+                "table_index": 2,
+                "title": "Products and Services Performance",
+                "units": "dollars in millions",
+                "markdown": "| Category | 2025 Sales |\n| --- | --- |\n| iPhone | $209,586 |",
+                "rows": [],
+                "columns": [],
+                "footnotes": [],
+                "source_html_hash": "abc123",
+            },
+        },
+    )
+    chunk.document = document
+
+    context = citation_context_response([chunk], anchor_chunk_id=chunk_id)
+
+    assert context.table is not None
+    assert context.table.title == "Products and Services Performance"
+    assert context.table.units == "dollars in millions"
+    assert context.table.markdown.startswith("| Category |")
 
 
 def test_get_citation_context_returns_404_when_chunk_is_missing(

@@ -12,6 +12,7 @@ from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.database.models.document_chunk import DocumentChunk
+    from app.database.models.document_table import DocumentTable
 
 
 class SourceDocument(Base, TimestampMixin):
@@ -40,5 +41,8 @@ class SourceDocument(Base, TimestampMixin):
     ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     chunks: Mapped[list[DocumentChunk]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    tables: Mapped[list[DocumentTable]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )

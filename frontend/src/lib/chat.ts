@@ -28,6 +28,14 @@ export type CitationContextChunk = {
   section?: string
 }
 
+export type CitationContextTable = {
+  tableIndex: number
+  title?: string
+  units?: string
+  markdown: string
+  tableData: Record<string, unknown>
+}
+
 export type CitationContext = {
   anchorChunkId: string
   documentId: string
@@ -37,6 +45,7 @@ export type CitationContext = {
   filingDate: string
   sourceUrl: string
   chunks: CitationContextChunk[]
+  table?: CitationContextTable
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {

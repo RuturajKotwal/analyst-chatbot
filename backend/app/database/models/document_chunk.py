@@ -41,7 +41,7 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     page: Mapped[str | None] = mapped_column(String(64))
-    section: Mapped[str | None] = mapped_column(String(255))
+    section: Mapped[str | None] = mapped_column(Text)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(EMBEDDING_DIMENSIONS),
