@@ -60,10 +60,13 @@ async def get_current_user(
     except AuthApiError as exc:
         raise _unauthorized("Invalid or expired token") from exc
 
-    if response is None or response.user is None or not response.user.email:
+    if response is None or response.user is None:
         raise _unauthorized("Invalid or expired token")
 
+    user_id = uuid.UUID(str(response.user.id))
+    email = response.user.email or f"anonymous-{user_id}@demo.local"
+
     return CurrentUser(
-        id=uuid.UUID(str(response.user.id)),
-        email=response.user.email,
+        id=user_id,
+        email=email,
     )

@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { PublicRoute } from '@/components/PublicRoute'
 import { ChatEmptyPage } from '@/pages/chat/ChatEmptyPage'
 import { ChatThreadPage } from '@/pages/chat/ChatThreadPage'
+import { Landing } from '@/pages/Landing'
 import { Login } from '@/pages/Login'
 import { SignUp } from '@/pages/SignUp'
 
@@ -28,7 +29,14 @@ function App() {
             </PublicRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/chats" replace />} />
+        <Route
+          path="/"
+          element={
+            <PublicRoute>
+              <Landing />
+            </PublicRoute>
+          }
+        />
         <Route
           path="/chats"
           element={

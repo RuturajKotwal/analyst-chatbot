@@ -38,13 +38,16 @@ supabase projects api-keys --project-ref <your-project-ref>
 
 Keep `service_role` out of git, client bundles, and frontend env files.
 
-## 4. Auth settings (email only)
+## 4. Auth settings
 
-This app uses email auth only — no Google/SSO.
+This app uses email auth for registered users. Its public recruiter demo uses Supabase anonymous sign-in.
 
 1. Dashboard → **Authentication** → **Providers**.
 2. Leave **Email** enabled.
-3. For local dev, you may want **Authentication** → **Email** → disable "Confirm email" so sign-up works without inbox access (re-enable for production).
+3. Enable **Anonymous Sign-Ins** so the public **Try demo** action can create a temporary session without collecting an email address.
+4. For local dev, you may want **Authentication** → **Email** → disable "Confirm email" so sign-up works without inbox access (re-enable for production).
+
+Anonymous sessions use the same row-level-security rules as registered users, so each demo visitor can access only their own chat threads. Add demo request and token limits before broadly sharing the deployed site.
 
 ## 5. Database schema management
 

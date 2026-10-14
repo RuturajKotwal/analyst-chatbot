@@ -32,7 +32,7 @@ export function UserMenu() {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
